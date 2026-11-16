@@ -1,0 +1,262 @@
+"""Generate specs for ALL chunks in a chunk file, batching small isolated
+continuous_regions into grouped LLM calls to reduce API overhead.
+
+Usage:
+
+    python3 scripts/generate_all_specs.py \\
+      --chunks output/hmac_chunks.json \\
+      --out-dir output/specs
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from collections import defaultdict
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from rtl_bug_agent.env import load_dotenv, make_client
+from rtl_bug_agent.rtl.io import read_chunks
+from rtl_bug_agent.schema import RtlChunk
+from rtl_bug_agent.spec.extractor import generate_chunk_spec
+
+# Chunks of kind ``continuous_region`` with fewer than this many lines are
+# considered "isolated fragments" and will be batched per source file.
+SMALL_THRESHOLD = 5
+
+
+def _separate_chunks(
+    chunks: list[RtlChunk], threshold: int = SMALL_THRESHOLD
+) -> tuple[list[RtlChunk], list[RtlChunk]]:
+    """Split chunks into *normal* (one spec per chunk) and *batched*
+    (synthetic chunks representing grouped small fragments)."""
+    normal: list[RtlChunk] = []
+    small_by_file: dict[str, list[RtlChunk]] = defaultdict(list)
+
+    for c in chunks:
+        if c.kind == "continuous_region" and (c.line_end - c.line_start + 1) < threshold:
+            small_by_file[c.source_file].append(c)
+        else:
+            normal.append(c)
+
+    batched: list[RtlChunk] = []
+    for source_file, small_list in small_by_file.items():
+        small_list.sort(key=lambda c: c.line_start)
+        batched.append(_make_batched_chunk(small_list, source_file))
+
+    return normal, batched
+
+
+def _make_batched_chunk(
+    small_chunks: list[RtlChunk], source_file: str
+) -> RtlChunk:
+    """Build a synthetic RtlChunk from a batch of small isolated fragments.
+
+    Code from each fragment is concatenated with ``// ---`` separators that
+    carry the original line range so the LLM can reference specific locations.
+    """
+    short_fn = Path(source_file).stem
+    code_parts: list[str] = []
+    for c in small_chunks:
+        code_parts.append(f"// --- {short_fn}.sv:{c.line_start}-{c.line_end} ---")
+        code_parts.append(c.code)
+
+    first = small_chunks[0]
+    last = small_chunks[-1]
+
+    # Use the module from the chunk that has one; None is fine for file-scope
+    module = first.module
+    scope = module or short_fn
+    safe_scope = scope.replace(".", "_")
+
+    return RtlChunk(
+        chunk_id=f"{safe_scope}__continuous_region__batched_small_assigns__001",
+        kind="continuous_region",
+        source_file=source_file,
+        module=module,
+        line_start=first.line_start,
+        line_end=last.line_end,
+        title=(
+            f"{scope}: batched {len(small_chunks)} isolated small "
+            f"declarations / assigns"
+        ),
+        context_summary=(
+            f"{len(small_chunks)} isolated small declarations / assignments in {scope}, "
+            f"separated by always blocks or other semantic boundaries so they cannot be "
+            f"merged into one continuous region; spans lines "
+            f"{first.line_start}-{last.line_end}."
+        ),
+        code="\n".join(code_parts),
+        dependencies=sorted({
+            d for c in small_chunks for d in (c.dependencies or [])
+        })[:40],
+    )
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate specs for all chunks, batching small fragments"
+    )
+    parser.add_argument("--chunks", required=True, help="Path to chunks JSON file")
+    parser.add_argument("--out-dir", required=True, help="Output directory for spec JSONs")
+    parser.add_argument("--env", "--env-file", dest="env", default=None,
+                        help="Dotenv file (default: ENV_FILE or project .env)")
+    parser.add_argument("--provider", default="CRBC_OPENAI", help="Env var prefix for LLM config")
+    parser.add_argument("--thinking", default="medium",
+                        help="Reasoning strength: low|medium|high|none "
+                             "(auto-ignored for DeepSeek; use 'none' for GPT endpoints "
+                             "that reject a thinking parameter)")
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help="Optional spec prompt path; defaults to the extractor's current prompt",
+    )
+    parser.add_argument(
+        "--small-threshold", type=int, default=SMALL_THRESHOLD,
+        help=f"Max lines for a continuous_region to be batched (default: {SMALL_THRESHOLD})",
+    )
+    parser.add_argument(
+        "--delay", type=float, default=0.3,
+        help="Seconds between LLM calls to avoid rate-limiting (default: 0.3)",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=8,
+        help="Parallel workers for spec generation (default: 8)",
+    )
+    parser.add_argument(
+        "--max-tokens", type=int, default=50000,
+        help="Maximum completion tokens per spec generation call (default: 50000)",
+    )
+    parser.add_argument(
+        "--llm-timeout", type=int, default=90,
+        help="HTTP timeout in seconds per spec generation request (default: 90)",
+    )
+    args = parser.parse_args()
+
+    # --- Load config ----------------------------------------------------------
+    load_dotenv(args.env)
+    _thinking = None if str(args.thinking).lower() == "none" else args.thinking
+    client = make_client(args.provider, thinking=_thinking, timeout_s=args.llm_timeout)
+
+    # --- Organise chunks ------------------------------------------------------
+    chunks = read_chunks(args.chunks)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    normal, batched = _separate_chunks(chunks, args.small_threshold)
+
+    small_count = sum(
+        1 for c in chunks
+        if c.kind == "continuous_region"
+        and (c.line_end - c.line_start + 1) < args.small_threshold
+    )
+    total_calls = len(normal) + len(batched)
+
+    print(f"Chunks: {len(chunks)} total")
+    print(f"  Individual specs:     {len(normal)}")
+    print(f"  Batched groups:       {len(batched)}  (from {small_count} small fragments)")
+    print(f"  Total LLM calls:      {total_calls}")
+    print()
+
+    # --- Generate specs -------------------------------------------------------
+    script_started = time.monotonic()
+    all_targets = normal + batched
+    # Filter out already-existing specs
+    pending = []
+    skip_count = 0
+    for chunk in all_targets:
+        out_path = out_dir / f"{chunk.chunk_id}.json"
+        if out_path.exists():
+            try:
+                existing = json.loads(out_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                existing = {"error": "unreadable checkpoint"}
+            if isinstance(existing, dict) and not existing.get("error"):
+                skip_count += 1
+                continue
+            print(f"  Retrying failed spec checkpoint: {chunk.chunk_id}")
+        pending.append((chunk, out_path))
+
+    print(f"  Already exist (skip): {skip_count}")
+    print(f"  To generate:          {len(pending)}")
+    print()
+
+    ok_count = 0
+    fail_count = 0
+    total_pending = len(pending)
+    lock = __import__('threading').Lock()
+
+    def _generate_one(chunk, out_path, idx):
+        nonlocal ok_count, fail_count
+        lines = chunk.line_end - chunk.line_start + 1
+        try:
+            spec = generate_chunk_spec(
+                chunk,
+                client,
+                prompt_path=args.prompt or None,
+                max_tokens=args.max_tokens,
+            )
+            out_path.write_text(
+                json.dumps(spec, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            with lock:
+                ok_count += 1
+            print(f"[{ok_count + fail_count + skip_count:3d}/{total_calls}] OK    {chunk.chunk_id}  ({lines}L)")
+            return True
+        except Exception as exc:
+            with lock:
+                fail_count += 1
+            out_path.write_text(
+                json.dumps({"chunk_id": chunk.chunk_id, "error": str(exc)},
+                          ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"[{ok_count + fail_count + skip_count:3d}/{total_calls}] FAIL  {chunk.chunk_id}  ({exc})")
+            return False
+
+    if args.workers > 1 and pending:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        print(f"  Running with {args.workers} workers ...")
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            futures = {
+                executor.submit(_generate_one, chunk, out_path, i): chunk
+                for i, (chunk, out_path) in enumerate(pending)
+            }
+            for future in as_completed(futures):
+                future.result()  # raise on error within the thread
+    else:
+        for i, (chunk, out_path) in enumerate(pending):
+            if args.delay > 0:
+                time.sleep(args.delay)
+            _generate_one(chunk, out_path, i)
+
+    # --- Summary --------------------------------------------------------------
+    print()
+    print(f"Done.  OK: {ok_count}  Skipped: {skip_count}  Failed: {fail_count}")
+    print(f"Specs written to {out_dir}")
+    s = client.stats()
+    s["worker_wall_seconds"] = s.get("total_wall_seconds", 0.0)
+    s["script_wall_seconds"] = round(time.monotonic() - script_started, 1)
+    s["parallelism_factor"] = round(
+        s["worker_wall_seconds"] / s["script_wall_seconds"], 3
+    ) if s["script_wall_seconds"] > 0 else 0.0
+    print(f"  LLM calls: {s['call_count']}  Tokens: {s['total_tokens']:,} "
+          f"({s['total_input_tokens']:,} in / {s['total_output_tokens']:,} out)  "
+          f"Wall: {s['total_wall_seconds']:.0f}s")
+    import json as _json
+    (Path(args.out_dir) / "_stats.json").write_text(
+        _json.dumps({
+            "phase": "spec_generation",
+            "ok_count": ok_count,
+            "skipped_count": skip_count,
+            "failed_count": fail_count,
+            "total_targets": total_calls,
+            **s,
+        }, ensure_ascii=False, indent=2),
+        encoding="utf-8")
+
+if __name__ == "__main__":
+    main()

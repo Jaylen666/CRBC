@@ -1,0 +1,93 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["results"],
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "finding_id",
+          "finding_hash",
+          "verdict",
+          "confidence",
+          "is_extra_finding",
+          "extra_finding_from_ref",
+          "matched_ref_ids",
+          "ref_assessments",
+          "summary",
+          "root_cause",
+          "trigger_condition",
+          "security_impact",
+          "software_visible",
+          "reasoning",
+          "source_evidence",
+          "additional_findings"
+        ],
+        "properties": {
+          "finding_id": {"type": "string"},
+          "finding_hash": {"type": "string"},
+          "verdict": {
+            "type": "string",
+            "enum": ["CONFIRMED", "FALSE_ALARM", "NEEDS_MORE_CONTEXT", "UNCERTAIN"]
+          },
+          "confidence": {"type": "number"},
+          "is_extra_finding": {"type": "boolean"},
+          "extra_finding_from_ref": {"type": ["string", "null"]},
+          "matched_ref_ids": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "ref_assessments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["ref_id", "classification", "assessment"],
+              "properties": {
+                "ref_id": {"type": "string"},
+                "classification": {
+                  "type": "string",
+                  "enum": [
+                    "same_behavior",
+                    "overlapping",
+                    "adjacent",
+                    "contradictory",
+                    "unrelated",
+                    "not_actionable"
+                  ]
+                },
+                "assessment": {"type": "string"}
+              }
+            }
+          },
+          "summary": {"type": "string"},
+          "root_cause": {"type": "string"},
+          "trigger_condition": {"type": "string"},
+          "security_impact": {"type": "string"},
+          "software_visible": {"type": "boolean"},
+          "reasoning": {"type": "string"},
+          "source_evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "line", "excerpt"],
+              "properties": {
+                "path": {"type": "string"},
+                "line": {"type": "integer"},
+                "excerpt": {"type": "string"}
+              }
+            }
+          },
+          "additional_findings": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

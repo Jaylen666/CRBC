@@ -1,0 +1,6 @@
+# Python 3.12 recommended. Install the matching CPU/CUDA PyTorch wheel first;
+# see README.md.
+numpy>=1.26,<3
+torch>=2.7.1,<3
+FlagEmbedding>=1.4.0,<2
+requests>=2.31,<3

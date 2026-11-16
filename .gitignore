@@ -1,0 +1,37 @@
+# Credentials and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Environments, model weights, caches and build files
+.venv/
+venv/
+.cache/
+models/
+external/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Locally generated runs, logs, and artifacts
+output/
+outputs/
+runs/
+results/
+experiments/
+legacy/
+*.log
+*.npz
+*.npy
+*.pt
+*.pth
+*.safetensors
+*.tar.gz
+.DS_Store
