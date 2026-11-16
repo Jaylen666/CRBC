@@ -37,13 +37,11 @@ Rules:
 Uncertain point types:
 
 - U_spec_gap: RTL is clear, but local spec/intent is unclear.
-- U_security_intent_gap: RTL behavior may conflict with clear/wipe/mask/secret/security intent.
 - U_cross_chunk_dependency: another chunk/module is needed to decide.
 - U_unhandled_legal_case: a legal enum/mode/config appears missing or falls into a suspicious default.
 - U_fault_containment_gap: a bad value may be used/written/output before error handling contains it.
 - U_dead_or_unused_signal: safety/error/mask/valid signal is constant, unused, or suspiciously unconnected.
-- U_width_param_hazard: this chunk shows a concrete legal parameter setting that can break array/generate/width assumptions.
-- U_temporal_window: done/idle/stop/ack/clear/write timing may allow stale or illegal behavior.
+
 
 Priority:
 
@@ -114,13 +112,13 @@ Output JSON schema:
       }
     }
   ],
-  "security_implications": "string - Check if this chunk touches ANY security-related category; if so, you MUST fill this field (do NOT leave it empty): (1) Keys/secrets: key, secret, seed, share, mask, entropy, PRNG/LFSR; (2) Digests/hashes: digest, hash, tag, MAC; (3) Wipe/clear: wipe, clear, zeroize; (4) Alerts/errors: alert, error, fatal, integrity, ECC, parity, escalation; (5) Access control: lifecycle (lc_*), debug enable, permission gates, config lock (regwen/lock), illegal access; (6) FSM integrity: sparse FSM encoding, state protection, SEU hardening; (7) Boundary/overflow: FIFO bounds, array index, width overflow. Describe: which signal + under what condition + potential security consequence. Leave empty ONLY if the chunk is unrelated to all categories above (e.g., pure data movement, counters, handshake timing). If it touches the above signals but you leave this empty, it is an error.",
+  "security_implications": "string - Check if this chunk touches ANY security-related category; if so, you MUST fill this field (do NOT leave it empty),
   "evidence_refs": ["file:line-line"]
 }
 
 Keep claims short. Prefer one precise sentence per `claim` and `risk`.
 
-Formal field rules (IMPORTANT for downstream proof generation):
+Formal field rules:
 - `formal.antecedent` / `formal.consequent`: write machine-readable expressions
   using real signal names and SystemVerilog operators (`==`, `!=`, `&&`, `||`,
   `!`, `>=`, `<=`). Example: antecedent `iv_sel == IV_CTR && mux_sel_err == 1`,
