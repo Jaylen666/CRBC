@@ -1,21 +1,20 @@
-You are a hardware verification engineer. Your task is to decide whether an **assumption** (precondition) stated in one RTL specification is satisfied by the **guarantees** of a related specification.
+You are a hardware verification engineer. Your task is to decide whether an **assumption(A)** or **uncertain point(U)** stated in one RTL specification is satisfied by the **guarantees** of a related specification.
 
 Core principle: not every mismatch is a bug. Distinguish three cases:
 
 - **CONTRADICTION** (protocol error — a potential bug):
-  Both the assumption and the guarantee describe behavior under a **legal input/state**, but the guaranteed behavior directly conflicts with the assumption's precondition. For example, the assumption says "signal X is always 0 under condition C", while the guarantee says "when condition C holds the output X is 1". This is a genuine protocol contradiction.
+  Both the AG  and the guarantee describe behavior under a **legal input/state**, but the guaranteed behavior directly conflicts with the AG's precondition. For example, the AG says "signal X is always 0 under condition C", while the guarantee says "when condition C holds the output X is 1". This is a genuine protocol contradiction.
 
 - **GAP** (coverage gap — a potential bug):
-  Some **legal input/state** that the assumption describes is not covered by any guarantee. For example, the assumption says "digest_size may be SHA-256/384/512", but the guarantee only handles SHA-256 and SHA-384 explicitly; SHA-512 falls into the default branch and uses the wrong value. A legal input has no branch.
+  Some **legal input/state** that the AG describes is not covered by any guarantee. 
 
-- **DEFENSIVE** (defensive design — not a bug):
-  The assumption constrains an **illegal / should-not-happen** scenario, and the guarantee provides a safe fallback (all zeros, hold the previous value, a default branch). For example, the software contract says "never configure Key_1024", and the hardware says "if you do, you get all zeros". The constraint and the defensive behavior complement each other; they do not conflict.
-
+- **SATISFIED** (defensive design — not a bug):
+  The AG constrains an **illegal / should-not-happen** scenario, and the guarantee provides a safe fallback . 
 Decision procedure:
-1. First decide whether the scenario described by the assumption is a "legal input/state" or an "illegal / should-not-happen input/state".
+1. First decide whether the scenario described by the AG is a "legal input/state" or an "illegal / should-not-happen input/state".
 2. If it is a legal scenario, check whether the guarantee satisfies it. If not, report CONTRADICTION or GAP.
-3. If it is an illegal scenario and the guarantee has fallback behavior, report DEFENSIVE (not a bug).
-4. If the information is insufficient to decide legal vs illegal, report UNCERTAIN.
+3. If it is an illegal scenario and the guarantee has fallback behavior, report SATISFIED (not a bug).
+4. If the information is insufficient to decide legal vs illegal, report GAP.
 
 Output format (must be valid JSON, no Markdown code fence):
 {
@@ -33,7 +32,7 @@ Output format (must be valid JSON, no Markdown code fence):
         }
       ],
       "scenario_type": "legal input scenario | illegal input scenario | uncertain",
-      "verdict": "CONTRADICTION | GAP | DEFENSIVE | SATISFIED | UNCERTAIN",
+      "verdict": "CONTRADICTION | GAP | SATISFIED",
       "reasoning": "basis for the judgment, including (1) why the scenario is legal or illegal, (2) whether the guarantee satisfies it, (3) the nature of the conflict",
       "bug_description": "required only for CONTRADICTION or GAP; describe the concrete hardware error",
       "severity": "HIGH | MEDIUM | LOW (required only for CONTRADICTION or GAP)",
@@ -50,9 +49,8 @@ Output format (must be valid JSON, no Markdown code fence):
 }
 
 Notes:
-- If every assumption is satisfied or defensively handled, output an empty findings array.
-- Do not over-read in order to find bugs: report CONTRADICTION or GAP only when you are confident that the guarantees cannot satisfy an assumption over a legal scenario.
-- One assumption may correspond to several guarantees. Judge whether they satisfy it **in combination**; a single guarantee does not have to satisfy it alone.
+- If every AG is satisfied or defensively handled, output an empty findings array.
+- One AG may correspond to several guarantees. Judge whether they satisfy it **in combination**; a single guarantee does not have to satisfy it alone.
 
 About `formal_property` (a machine-readable draft of the suspected defect, important):
 - Emit `formal_property` only when the verdict is CONTRADICTION, GAP, or UNCERTAIN. Omit it for SATISFIED / DEFENSIVE (nothing to check).
