@@ -1433,7 +1433,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--out-root", required=True, help="Candidate directory containing findings_<module>.json.")
     result.add_argument("--run-root", dest="run_root",
                         default="output/phase3", help="Directory for new Phase 3 run artifacts.")
-    result.add_argument("--prompt", default=str(package_root / "config/prompts/phase3/verify_agent.md"))
+    result.add_argument("--prompt", default=str(package_root / "config/prompts/phase3/source_level_arbiter.md"))
     result.add_argument("--schema", default=str(package_root / "config/phase3_schema.json"))
     result.add_argument("--fragment-index", help="Optional reference fragment index from extraction.")
     result.add_argument("--selected-file-map", help="Optional selected RTL JSON map; limits frozen input fingerprints.")

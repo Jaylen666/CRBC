@@ -28,7 +28,7 @@ from rtl_bug_agent.phase2.signal_graph import SignalGraph
 from rtl_bug_agent.phase2.trace import append_trace
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase2/channel_b_ag_pairing.md"
+DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase2/consistency_analyzer.md"
 
 
 def _call_with_retry(fn, attempts: int = 3, delay: float = 1.0):

@@ -6,10 +6,10 @@ The main API setup and pipeline commands are documented in the [root README](../
 
 | File | Purpose |
 | --- | --- |
-| `prompts/chunk_spec_agu_structured_slim_en.md` | Structured specifications from RTL chunks. |
-| `prompts/phase2/channel_b_ag_pairing.md` | Consistency analyzer: candidate generation from assumption–guarantee pairs. |
+| `prompts/behaviour_extractor.md` | Structured specifications from RTL regions. |
+| `prompts/phase2/consistency_analyzer.md` | Consistency analyzer: candidate generation from AGU sets. |
 | `prompts/phase2/ref_extract.md` | Design-document reference atom extraction. |
-| `prompts/phase3/verify_agent.md` | Source-level arbiter: review policy and evidence requirements. |
+| `prompts/phase3/source_level_arbiter.md` | Source-level arbiter: review policy and evidence requirements. |
 | `phase3_schema.json` | Structured worker output contract. |
 
 The optional RTL prefilter uses a built-in prompt in `rtl_bug_agent/rtl/prefilter.py`. To override it, create `config/prompts/rtl_prefilter.md`. The source-level arbiter also accepts an explicit `--prompt` and `--schema` in its standalone CLI. Use fresh outputs after changing prompts.

@@ -24,7 +24,7 @@ from rtl_bug_agent.phase2.signal_graph import SignalGraph
 from rtl_bug_agent.phase2.trace import TraceSink, append_trace
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase3/verify_agent.md"
+DEFAULT_PROMPT = _PROJECT_ROOT / "config/prompts/phase3/source_level_arbiter.md"
 
 
 def _call_with_retry(fn, attempts: int = 3, delay: float = 1.0):
