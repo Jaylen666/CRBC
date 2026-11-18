@@ -6,10 +6,9 @@ CRBC (Cross-Region Behavioural Consistency Checking) is an LLM-assisted framewor
 
 Linux and Python 3.12 are recommended. Node.js/npm is required to install Codex CLI for source-level examination.
 
-```bash
-git clone https://github.com/Jaylen666/CRBC.git
-cd CRBC
+Download and extract the repository ZIP, then run the commands below from the extracted directory.
 
+```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
